@@ -39,5 +39,16 @@ function clone(st){return{b:st.b.map(r=>r.map(c=>c&&{...c})),h:st.h.map(h=>({...
 function search(st,depth,alpha=-Infinity,beta=Infinity){const ms=(()=>{const save=snap();load(st);const r=legal(st.t);load(save);return r})();if(!ms.length)return st.t===0?999999:-999999;if(depth<=0)return evaluate(st.b);if(st.t===0){let v=-Infinity;for(const m of ms){v=Math.max(v,search(apply(clone(st),m,m.prom),depth-1,alpha,beta));alpha=Math.max(alpha,v);if(alpha>=beta)break}return v}else{let v=Infinity;for(const m of ms){v=Math.min(v,search(apply(clone(st),m,m.prom),depth-1,alpha,beta));beta=Math.min(beta,v);if(alpha>=beta)break}return v}}
 function aiPick(){const ms=legal(1);if(!ms.length)return null;const depth=+document.querySelector('#depth').value;let best=ms[0],score=Infinity;for(const m of ms){const v=search(apply(clone(snap()),m,m.prom),depth-1);if(v<score){score=v;best=m}}return best}
 async function ai(){if(gameOver||turn!==1||aiBusy)return;aiBusy=true;document.querySelector('#aiMove').disabled=true;await new Promise(r=>setTimeout(r,100));const m=aiPick();if(m)play(m);aiBusy=false;document.querySelector('#aiMove').disabled=false}
-function review(){if(!history.length){document.querySelector('#reviewBox').textContent='まず対局を始めてください。';return}const scores=history.map(h=>evaluate(h.state.b));let big=[];for(let i=1;i<scores.length;i++){const d=scores[i]-scores[i-1];if(Math.abs(d)>=500)big.push([i+1,d])}let html=`<strong>AI感想戦</strong><br>全${history.length}手を簡易解析しました。<br>`;if(big.length)html+='評価が大きく動いた場面：<br>'+big.slice(-5).map(a=>`${a[0]}手目：${a[1]>0?'先手側':'後手側'}に評価が動きました。`).join('<br>');else html+='大きな評価変動は少ない対局でした。';html+='<br><br>このAIは駒得、成り、王の安全、持ち駒を中心に評価しています。';document.querySelector('#reviewBox').innerHTML=html}
+async function review(){
+ const box=document.querySelector('#reviewBox');
+ if(!history.length){box.textContent='まず対局を始めてください。';return}
+ box.textContent='Geminiが棋譜を分析中…';
+ const moves=history.map(h=>h.text);
+ try{
+   const r=await fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({moves})});
+   const data=await r.json();
+   if(!r.ok) throw new Error(data.error||'AI感想戦に失敗しました。');
+   box.innerHTML='<strong>Gemini AI感想戦</strong><br><br>'+String(data.text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+ }catch(e){box.textContent='AI感想戦エラー：'+e.message;}
+}
 document.querySelector('#newGame').onclick=reset;document.querySelector('#undo').onclick=()=>{if(!history.length)return;load(history.pop().state);gameOver=false;selected=null;lastMove=null;render()};document.querySelector('#aiMove').onclick=ai;document.querySelector('#review').onclick=review;reset();
